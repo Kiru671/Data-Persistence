@@ -1,8 +1,10 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using Random = UnityEngine.Random;
 
 public class MainManager : MonoBehaviour
 {
@@ -12,28 +14,69 @@ public class MainManager : MonoBehaviour
 
     public Text ScoreText;
     public GameObject GameOverText;
+
+    public int brickCount;
     
     private bool m_Started = false;
-    private int m_Points;
+    public int m_Points;
     
-    private bool m_GameOver = false;
+    public bool m_GameOver = false;
+    public static event Action OnGameOver;
+    public static event Action OnHIScoreChanged;
 
-    
-    // Start is called before the first frame update
     void Start()
     {
         const float step = 0.6f;
         int perLine = Mathf.FloorToInt(4.0f / step);
+
+        bool gameSaved = DataManager.getInstance.GetFlag(SceneID.sceneID, "BrickSaved");
+        Debug.Log($"Game saved status: {gameSaved}");
         
         int[] pointCountArray = new [] {1,1,2,2,5,5};
-        for (int i = 0; i < LineCount; ++i)
+
+        if (gameSaved)
         {
-            for (int x = 0; x < perLine; ++x)
+            //Load saved score
+            m_Points = DataManager.getInstance.GetInt(SceneID.sceneID, "CurrentScore");
+            ScoreText.text = $"Score : {m_Points}";
+            
+            Debug.Log("Loading saved bricks");
+            // Load saved line count
+            LineCount = DataManager.getInstance.GetInt(SceneID.sceneID, "LineCount");
+            Debug.Log($"Loaded LineCount: {LineCount}");
+            
+            // Load saved bricks
+            int totalBricks = DataManager.getInstance.GetInt(SceneID.sceneID, "TotalBricks");
+            Debug.Log($"Loading {totalBricks} bricks");
+            
+            for (int x = 0; x < totalBricks; ++x)
             {
-                Vector3 position = new Vector3(-1.5f + step * x, 2.5f + i * 0.3f, 0);
-                var brick = Instantiate(BrickPrefab, position, Quaternion.identity);
-                brick.PointValue = pointCountArray[i];
-                brick.onDestroyed.AddListener(AddPoint);
+                Vector3 savedPos = DataManager.getInstance.GetVector3(SceneID.sceneID, $"BrickPosition{x}");
+                int savedPoints = DataManager.getInstance.GetInt(SceneID.sceneID, $"BrickPoints{x}");
+                
+                if (savedPos != Vector3.zero)
+                {
+                    var savedBrick = Instantiate(BrickPrefab, savedPos, Quaternion.identity);
+                    brickCount++;
+                    savedBrick.PointValue = savedPoints;
+                    savedBrick.onDestroyed.AddListener(AddPoint);
+                }
+            }
+        }
+        else
+        {
+            Debug.Log("Creating new brick layout");
+            // Create new brick layout
+            for (int i = 0; i < LineCount; ++i)
+            {
+                for (int x = 0; x < perLine; ++x)
+                {
+                    Vector3 position = new Vector3(-1.5f + step * x, 2.5f + i * 0.3f, 0);
+                    var brick = Instantiate(BrickPrefab, position, Quaternion.identity);
+                    brickCount++;
+                    brick.PointValue = pointCountArray[i % pointCountArray.Length];
+                    brick.onDestroyed.AddListener(AddPoint);
+                }
             }
         }
     }
@@ -48,6 +91,7 @@ public class MainManager : MonoBehaviour
                 float randomDirection = Random.Range(-1.0f, 1.0f);
                 Vector3 forceDir = new Vector3(randomDirection, 1, 0);
                 forceDir.Normalize();
+                
 
                 Ball.transform.SetParent(null);
                 Ball.AddForce(forceDir * 2.0f, ForceMode.VelocityChange);
@@ -60,17 +104,29 @@ public class MainManager : MonoBehaviour
                 SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
             }
         }
+        if(!m_GameOver && brickCount == 0)
+        {
+            GameOver();
+        }
     }
 
     void AddPoint(int point)
     {
         m_Points += point;
         ScoreText.text = $"Score : {m_Points}";
+        if(m_Points > DataManager.getInstance.GetInt("0", "HiScore"))
+        {
+            DataManager.getInstance.SetInt("0", "HiScore", m_Points);
+            OnHIScoreChanged?.Invoke();
+        }
+        brickCount--;
     }
 
     public void GameOver()
     {
         m_GameOver = true;
         GameOverText.SetActive(true);
+        OnGameOver?.Invoke();
+        DataManager.getInstance.SetFlag(SceneID.sceneID, "BrickSaved", false);
     }
 }

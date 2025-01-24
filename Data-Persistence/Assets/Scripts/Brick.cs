@@ -8,16 +8,31 @@ public class Brick : MonoBehaviour
 {
     public UnityEvent<int> onDestroyed;
     
-    public int PointValue;
+    private int pointValue;
+    public int PointValue 
+    { 
+        get => pointValue;
+        set
+        {
+            pointValue = value;
+            UpdateColor();
+        }
+    }
 
     void Start()
     {
+        UpdateColor();
+    }
+
+    private void UpdateColor()
+    {
         var renderer = GetComponentInChildren<Renderer>();
+        if (renderer == null) return;
 
         MaterialPropertyBlock block = new MaterialPropertyBlock();
-        switch (PointValue)
+        switch (pointValue)
         {
-            case 1 :
+            case 1:
                 block.SetColor("_BaseColor", Color.green);
                 break;
             case 2:
@@ -35,9 +50,9 @@ public class Brick : MonoBehaviour
 
     private void OnCollisionEnter(Collision other)
     {
-        onDestroyed.Invoke(PointValue);
+        onDestroyed.Invoke(pointValue);
         
         //slight delay to be sure the ball have time to bounce
-        Destroy(gameObject, 0.2f);
+        Destroy(gameObject, 0.1f);
     }
 }
